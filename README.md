@@ -1,6 +1,6 @@
 # OpenCV-Counter
 
-##Required libraries
+## Required libraries
 
 NumPy
 OpenCV
