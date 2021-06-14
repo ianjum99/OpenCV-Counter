@@ -4,8 +4,8 @@ A simple application using OpenCV to detect the amount of people going in certai
 
 ## Required libraries
 
-*NumPy
-*OpenCV
-*dlib
-*imutils
-*SciPy
+* NumPy
+* OpenCV
+* dlib
+* imutils
+* SciPy
