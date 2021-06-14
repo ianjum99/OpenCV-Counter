@@ -8,3 +8,4 @@ NumPy
 OpenCV
 dlib
 imutils
+SciPy
