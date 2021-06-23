@@ -22,4 +22,4 @@ Detecting uses OpenCV along with elements from pyimagesearch (custom module) in 
 
 ## Tracking
 
-Tracking is the less computationally espensive element, this uses Euclidean models in order to determine the distance between two or more objects and calculate the next frame to which they will move- the majority of the algorithm uses this as it is less expensive
+Tracking is the less computationally expensive element, this uses Euclidean models in order to determine the distance between two or more objects and calculate the next frame to which they will move- the majority of the algorithm uses this as it is less expensive
