@@ -1,11 +1,11 @@
 FROM pyimagesearch.centroidtracker
-  GET CentroidTracker
+	GET CentroidTracker
 FROM pyimagesearch.trackableobject
-  GET TrackableObject
+	GET TrackableObject
 FROM imutils.video
-  GET VideoStream
+	GET VideoStream
 FROM imutils.video
-  GET FPS
+	GET FPS
 GET numpy ABBREVIATE AS np
 GET imutils
 GET time
@@ -14,25 +14,25 @@ GET cv2
 
 SET ap TO argument parser
 ADD condition TO argument parser
-  WHERE
-  -p IS REQUIRED AND IS path to caffe prototxt file
+	WHERE
+	-p IS REQUIRED AND IS path to caffe prototxt file
 ADD condition TO argument parser
-  WHERE
-  -m IS REQUIRED AND IS path to pre-trained model
+	WHERE
+	-m IS REQUIRED AND IS path to pre-trained model
 ADD CONDITION
-  WHERE
-  -i IS OPTIONAL AND IS path to video file
+	WHERE
+	-i IS OPTIONAL AND IS path to video file
 ADD CONDITION
-  WHERE
-  -o IS OPTIONAL AND IS path to output video file
+	WHERE
+	-o IS OPTIONAL AND IS path to output video file
 ADD CONDITION
-  WHERE
-  -c IS OPTIONAL AND IS probability parameter /
-  AND IS DEFAULT 0.4
+	WHERE
+	-c IS OPTIONAL AND IS probability parameter /
+	AND IS DEFAULT 0.4
 ADD CONDITION 
-  WHERE 
-  -s IS OPTIONAL AND IS skip frames between detections /
-  AND IS DEFAULT 30
+	WHERE 
+	-s IS OPTIONAL AND IS skip frames between detections /
+	AND IS DEFAULT 30
 SET args to PARSE all arguments
 
 SET LIST classes to ["background", "aeroplane", "bicycle", "bird", "boat",
@@ -44,9 +44,9 @@ PRINT loading model
 SET net TO READ FROM prototxt file
 
 IF NOT CONDITION FROM argument parser THEN
-  USE webcam 
+	USE webcam 
 ELSE
-  USE video file input
+	USE video file input
 ENDIF
 
 SET WRITER TO none
@@ -64,88 +64,136 @@ SET totalUp to 0
 
 SET FPS TO start
 WHILE TRUE
-REPEAT
-  SET frame TO read
-  UNTIL
-    webcam OR video is used
-    
-IF NOT CONDITION FROM argument parser AND frame SET TO none THEN
-  BREAK
+	REPEAT
+		SET frame TO read
+		UNTIL
+			webcam OR video is used
+
+	IF NOT CONDITION FROM argument parser AND frame SET TO none THEN
+		BREAK
+	ENDIF
+
+	SET frame to resize to width 500px
+	SET rgb to convert from BGR to RGB
+
+	IF W IS NONE OR H IS NONE THEN
+		SET W AND H TO frame template 2
+	ENDIF
+
+	IF argument parser CONDITION is NOT none AND writer IS NOT NONE THEN
+		SET fourcc TO VideoWriter_fourcc FROM cv2 library
+		SET writer ARGS TO VideoWriter WITH ARGS output, fourcc, 30, W AND H, TRUE
+	ENDIF
+
+	SET status TO waiting
+	SET LIST rects
+
+	IF totalFrames MODULUS args IS EQUAL TO 0 THEN
+	SET status TO detecting
+	  SET LIST trackers TO empty
+
+		SET blob TO blobFromImage WITH ARGS frame, 0.007843, W AND H, 127.5
+		CALL FUNCTION SET net.setInput WITH ARGS blob
+		SET detections TO CALL FUNCTION SET net.forward WITH ARGS none
+			IF confidence IS GREATER THAN ELEMENT confidence OF LIST args THEN
+				SET idx TO INTEGER LIST detections WITH ARGS 0, 0, i, 1
+					IF LIST CLASSES WITH ARGS idx DO NOT EQUAL person THEN
+					CONTINUE
+					SET box TO LIST detections WITH ARGS (0,0,i, 3:7) MULTIPLY numpy ARRAY W AND H, W AND H
+					SET startX, startY, endX, endY TO box CALL FUNCTION astype INTEGER
+
+					SET tracker to CALL FUNCTION correlation_tracker  
+					SET rect to CALL FUNCTION rectangle WITH ARGS SstartX, startY, endX, endY
+					SET tracker to CALL FUNCTION start_track WITH ARGS rgb, rect
+
+					SET trackers TO CALL FUNCTION append WITH ARGS tracker
+					ENDIF
+			ENDIF
+	ELSE
+		FOR tracker IN trackers
+			SET status TO tracking
+
+			SET tracker TO CALL FUNCTION update WITH ARG rgb
+			SET pos TO tracker TO CALL FUNCTION get_position 
+
+			SET startX TO CALL FUNCTION pos.left AS INTEGER
+			SET startY TO CALL FUNCTION pos.top AS INTEGER
+			SET endX TO CALL FUNCTION pos.right AS INTEGER
+			SET endY TO CALL FUNCTION pos.bottom AS INTEGER
+
+			SET rects to CALL FUNCTION append FROM numpy WITH ARGS startX, startY, endX, endY
+		ENDFOR
+
+		CALL FUNCTION line FROM CV2 WITH ARGS frame, 0 AND H DIVDE 2, W AND H DIVIDE 2, 0 AND 255 AND 255, 2
+
+		SET objects TO CALL FUNCTION ct.update from dlib WITH ARGS rects
+
+		FOR ARGS objectID, centroid IN objects CALL FUNCTION items
+			SET to TO trackableObjects TO CALL FUNCTION get WITH ARGS objectID, none
+
+			IF to EQUALS none THEN
+				SET to TO CALL FUNCTION TrackableObject with ARGS objectID, centroid
+
+			ELSE
+				SET y TO LIST WITH OBJECT 1 FROM LIST c FOR c IN to.centroids
+				SET direction TO OBJECT 1 FROM LIST centroid MINUS np CALLS FUNCTION mean WITH args y
+				SET to.centroids TO CALL FUNCTION append WITH ARGS centroid
+
+				IF NOT to CALLS FUNCTION counted THEN
+					IF direction IS LESS THAN 0 AND ELEMENT 1 OF LIST centroid IS LESS THAN H DIVDED BY 2 THEN
+						SET totalUp TO totalUp PLUS 1
+						SET FUNCTION to.counted TO TRUE
+					ELSE IF direction IS GREATER THAN 0 AND ELEMENT 1 OF LIST centroid IS GREATER THAN H DIVDED BY 2 THEN
+						SET totalDown TO totalDown PLUS 1
+						SET FUNCTION to.counted TO TRUE
+				ENDIF
+
+			SET trackableObjects WITH ARGS objectID TO to
+
+				SET text TO PRINT id {} CALL FUNCTION format WITH ARGS objectID
+				FUNCTION cv2.putText WITH ARGS frame, text, ELEMENT 1 OF LIST centroid MINUS 10, 
+					FUNCTION cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2
+				FUNCTION cv2.circle WITH ARGS frame, (ELEMENT 0 OF LIST centroid, ELEMENT 1 OF LIST centroid),
+					4, (0, 255, 0), -1)
+		SET LIST info TO (Up, totalUp), (Down, totalDown), (Status, status)
+		
+		FOR i,(k,v) IN FUNCTION enumerate WITH ARGS info
+			SET text TO {}:{} CALLS FUNCTION format WITH ARGS k, v
+			FUNCTION cv2.putText WITH ARGS frame, text, (10, H MINUS (i MULTIPLY 20) PLUS 20), 
+				FUNCTION cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2#
+			
+			IF writer IS NOT none THEN
+				SET FUNCTION writer.write WITH ARGS frame
+				
+				FUNCTION cv2.imshow WITH args Frame, frame
+				SET key to FUNCTION cv2.waitKey WITH ARGS 1 AND 0xFF
+				
+				IF key IS EQUAL TO FUNCTION ord WITH ARGS q THEN
+					BREAK
+				ENDIF
+			ENDIF
+		
+		SET totalFrames TO totalFrames PLUS 1
+		FUNCTION fps.update
+	ENDIF
+
+FUNCTION fps.stop
+PRINT LIST INFO elapsed time AS WHOLE NUMBERS FUNCTION format with ARGS FUNCTION fps.elapsed
+PRINT LIST INFO approx. fps AS WHOLE NUMBERS FUNCTION format with ARGS FUNCTION fps.fps
+
+IF writer IS NOT NONE THEN
+	FUNCTION writer.release
+	
+	IF NOT FUNCTION args.get WITH ARGS input, false THEN
+		FUNCTION vs.stop
+		ENDIF
+	
+	ELSE
+		FUNCTION vs.release
 ENDIF
- 
-SET frame to resize to width 500px
-SET rgb to convert from BGR to RGB
 
-IF W IS NONE OR H IS NONE THEN
-  SET W AND H TO frame template 2
-ENDIF
-
-IF argument parser CONDITION is NOT none AND writer IS NOT NONE THEN
-  SET fourcc TO VideoWriter_fourcc FROM cv2 library
-  SET writer ARGS TO VideoWriter WITH ARGS output, fourcc, 30, W AND H, TRUE
-ENDIF
-
-SET status TO waiting
-SET LIST rects
-
-IF totalFrames MODULUS args IS EQUAL TO 0 THEN
-  SET status TO detecting
-  SET LIST trackers TO empty
-  
-  SET blob TO blobFromImage WITH ARGS frame, 0.007843, W AND H, 127.5
-  CALL FUNCTION SET net.setInput WITH ARGS blob
-  SET detections TO CALL FUNCTION SET net.forward WITH ARGS none
-    IF confidence IS GREATER THAN ELEMENT confidence OF LIST args THEN
-      SET idx TO INTEGER LIST detections WITH ARGS 0, 0, i, 1
-      IF LIST CLASSES WITH ARGS idx DO NOT EQUAL person THEN
-        CONTINUE
-      SET box TO LIST detections WITH ARGS (0,0,i, 3:7) MULTIPLY numpy ARRAY W AND H, W AND H
-      SET startX, startY, endX, endY TO box CALL FUNCTION astype INTEGER
-      
-      SET tracker to CALL FUNCTION correlation_tracker  
-      SET rect to CALL FUNCTION rectangle WITH ARGS SstartX, startY, endX, endY
-      SET tracker to CALL FUNCTION start_track WITH ARGS rgb, rect
-      
-      SET trackers TO CALL FUNCTION append WITH ARGS tracker
-      ENDIF
-    ENDIF
-ELSE
-  FOR tracker IN trackers
-    SET status TO tracking
-    
-    SET tracker TO CALL FUNCTION update WITH ARG rgb
-    SET pos TO tracker TO CALL FUNCTION get_position 
-    
-    SET startX TO CALL FUNCTION pos.left AS INTEGER
-    SET startY TO CALL FUNCTION pos.top AS INTEGER
-    SET endX TO CALL FUNCTION pos.right AS INTEGER
-    SET endY TO CALL FUNCTION pos.bottom AS INTEGER
-    
-    SET rects to CALL FUNCTION append FROM numpy WITH ARGS startX, startY, endX, endY
-    ENDFOR
-    
-  CALL FUNCTION line FROM CV2 WITH ARGS frame, 0 AND H DIVDE 2, W AND H DIVIDE 2, 0 AND 255 AND 255, 2
-  
-  SET objects TO CALL FUNCTION ct.update from dlib WITH ARGS rects
-  
-  FOR ARGS objectID, centroid IN objects CALL FUNCTION items
-    SET to TO trackableObjects TO CALL FUNCTION get WITH ARGS objectID, none
-    
-    IF to EQUALS none THEN
-      SET to TO CALL FUNCTION TrackableObject with ARGS objectID, centroid
-    
-    ELSE
-      SET y TO LIST WITH OBJECT 1 FROM LIST c FOR c IN to.centroids
-      SET direction TO OBJECT 1 FROM LIST centroid MINUS np CALLS FUNCTION mean WITH args y
-      SET to.centroids TO CALL FUNCTION append WITH ARGS centroid
-        
-        IF NOT to CALLS FUNCTION counted THEN
-          IF
-    
-    
-   
-
-
-    
-  
+FUNCTION cv2.destroyAllWindows
+ENDWHILE
+			
+			
 
