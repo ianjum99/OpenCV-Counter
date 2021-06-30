@@ -47,6 +47,9 @@ IF NOT CONDITION FROM argument parser THEN
 	USE webcam 
 ELSE
 	USE video file input
+	IF INPUT IS NOT video file input
+		BREAK
+	ENDIF
 ENDIF
 
 SET WRITER TO none
